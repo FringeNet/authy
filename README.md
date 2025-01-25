@@ -119,7 +119,131 @@ docker stop authy
 | `PROTECTED_WEBSITE_URL` | URL of the website to protect | Required |
 | `PORT` | Port to listen on | 3000 |
 | `RUST_LOG` | Log level (error, warn, info, debug, trace) | info |
+
+## AWS Cognito Setup
+
+### 1. Create User Pool
+```bash
+# Navigate to AWS Cognito Console
+AWS Console -> Amazon Cognito -> User Pools -> Create user pool
 ```
+- Choose "Cognito user pool" as the provider type
+- Configure sign-in options:
+  - Allow users to sign in with: Email
+  - Allow users to sign up with: Email
+- Configure security requirements:
+  - Password minimum length: 8
+  - Enable MFA (recommended): Optional
+- Configure sign-up experience:
+  - Enable self-service account recovery
+  - Enable self-service sign-up
+- Configure message delivery:
+  - Email provider: Amazon SES or Cognito defaults
+
+### 2. Configure App Integration
+```bash
+# In User Pool settings
+App integration -> App client list -> Create app client
+```
+- Create app client:
+  - App client name: "Authy"
+  - Public client: No
+  - Generate client secret: Yes
+  - Authentication flows:
+    - ✓ ALLOW_USER_PASSWORD_AUTH
+    - ✓ ALLOW_REFRESH_TOKEN_AUTH
+- OAuth 2.0 settings:
+  - Allowed OAuth flows:
+    - ✓ Authorization code grant
+  - Allowed OAuth scopes:
+    - ✓ openid
+    - ✓ email
+    - ✓ profile
+  - Callback URLs:
+    - `https://your-domain.com/callback`
+  - Sign out URLs (optional):
+    - `https://your-domain.com/signout`
+
+### 3. Configure Domain
+```bash
+# In User Pool settings
+App integration -> Domain -> Actions -> Create custom domain
+```
+- Choose domain type:
+  - Cognito domain: `your-prefix.auth.region.amazoncognito.com`
+  - Custom domain (requires SSL cert): `auth.your-domain.com`
+
+### 4. Configure Hosted UI
+```bash
+# In User Pool settings
+App integration -> Hosted UI
+```
+- Customize appearance:
+  - Logo image
+  - CSS customizations
+  - Color scheme
+- Configure sign-in/sign-up options:
+  - Email verification
+  - Password requirements
+  - Custom attributes
+
+### 5. Note Required Values
+```bash
+# User Pool settings
+General settings -> User pool ID
+# Example: us-east-1_abcd1234
+
+# App client settings
+App integration -> App client list -> Client ID
+# Example: 1234567890abcdef1234
+
+# App client settings -> Show client secret
+# Example: abcdef1234567890abcdef1234567890
+
+# Domain
+App integration -> Domain
+# Example: https://your-prefix.auth.region.amazoncognito.com
+```
+
+### 6. Optional: Add Users
+```bash
+# In User Pool settings
+Users -> Create user
+```
+- Create admin user:
+  - Email: admin@your-domain.com
+  - Temporary password: Yes
+  - Mark email as verified
+- Or enable self-service sign-up:
+  - Users can create their own accounts
+  - Email verification required
+  - Optional admin approval
+
+### 7. Security Best Practices
+- Use strong password policies
+- Enable MFA for sensitive applications
+- Regularly rotate app client secrets
+- Monitor user pool analytics
+- Set up CloudWatch alarms for:
+  - Failed authentication attempts
+  - User pool modifications
+  - Token usage patterns
+
+### 8. Testing
+```bash
+# Test authentication flow
+curl http://localhost:3000/
+# Should redirect to Cognito login page
+# After login, should redirect back to /callback
+# Then redirect to protected website
+```
+
+### 9. Troubleshooting
+- Check callback URL matches exactly
+- Verify client ID and secret
+- Ensure OAuth scopes are correct
+- Check CORS settings if using SPA
+- Monitor CloudWatch logs for errors
 
 ## Security Considerations
 
