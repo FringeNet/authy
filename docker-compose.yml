@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  authy:
+    build: .
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    environment:
+      - COGNITO_DOMAIN=${COGNITO_DOMAIN}
+      - COGNITO_CLIENT_ID=${COGNITO_CLIENT_ID}
+      - COGNITO_CLIENT_SECRET=${COGNITO_CLIENT_SECRET}
+      - SERVER_DOMAIN=${SERVER_DOMAIN}
+      - PROTECTED_WEBSITE_URL=${PROTECTED_WEBSITE_URL}
+      - PORT=${PORT:-3000}
+      - RUST_LOG=${RUST_LOG:-info}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${PORT:-3000}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s

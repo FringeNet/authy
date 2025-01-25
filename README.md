@@ -45,6 +45,8 @@ The main benefit of this setup is that internal services remain unexposed to the
 
 ## Development
 
+### Local Development
+
 ```bash
 # Build the project
 cargo build
@@ -59,21 +61,64 @@ cargo test
 cargo build --release
 ```
 
-## Environment Variables
+### Docker Deployment
 
-```env
-# AWS Cognito Configuration
-COGNITO_DOMAIN=https://your-domain.auth.region.amazoncognito.com
-COGNITO_CLIENT_ID=your-client-id
-COGNITO_CLIENT_SECRET=your-client-secret
-SERVER_DOMAIN=http://your-server-domain
+The service can be run using Docker in two ways:
 
-# Protected Resource
-PROTECTED_WEBSITE_URL=https://website-to-protect.com
+1. Using docker-compose (recommended):
+```bash
+# Copy example environment file
+cp .env.example .env
 
-# Server Configuration
-PORT=3000
-RUST_LOG=info
+# Edit environment variables
+vim .env
+
+# Start the service
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop the service
+docker-compose down
+```
+
+2. Using Docker directly:
+```bash
+# Build the image
+docker build -t authy .
+
+# Run the container
+docker run -d \
+  -p 3000:3000 \
+  -e COGNITO_DOMAIN=https://your-domain.auth.region.amazoncognito.com \
+  -e COGNITO_CLIENT_ID=your-client-id \
+  -e COGNITO_CLIENT_SECRET=your-client-secret \
+  -e SERVER_DOMAIN=http://your-server-domain \
+  -e PROTECTED_WEBSITE_URL=https://website-to-protect.com \
+  -e PORT=3000 \
+  -e RUST_LOG=info \
+  --name authy \
+  authy
+
+# View logs
+docker logs -f authy
+
+# Stop the container
+docker stop authy
+```
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `COGNITO_DOMAIN` | AWS Cognito domain URL | Required |
+| `COGNITO_CLIENT_ID` | AWS Cognito client ID | Required |
+| `COGNITO_CLIENT_SECRET` | AWS Cognito client secret | Required |
+| `SERVER_DOMAIN` | Public domain where this service is hosted | Required |
+| `PROTECTED_WEBSITE_URL` | URL of the website to protect | Required |
+| `PORT` | Port to listen on | 3000 |
+| `RUST_LOG` | Log level (error, warn, info, debug, trace) | info |
 ```
 
 ## Security Considerations
