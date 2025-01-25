@@ -9,6 +9,13 @@ pub enum AppError {
     #[error("Authentication error: {0}")]
     Auth(String),
     
+    #[error("Unauthorized access: {message}")]
+    Unauthorized {
+        message: String,
+        client_ip: String,
+        path: String,
+    },
+    
     #[error("Configuration error: {0}")]
     Config(#[from] std::env::VarError),
     
@@ -23,6 +30,16 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, message) = match self {
             AppError::Auth(msg) => (StatusCode::UNAUTHORIZED, msg),
+            AppError::Unauthorized { message, client_ip, path } => {
+                tracing::warn!(
+                    target: "security_log",
+                    "Unauthorized access attempt from IP={} to path={}. Reason: {}",
+                    client_ip,
+                    path,
+                    message
+                );
+                (StatusCode::UNAUTHORIZED, message)
+            },
             AppError::Config(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
             AppError::Request(e) => (StatusCode::BAD_GATEWAY, e.to_string()),
             AppError::Internal(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
@@ -48,6 +65,18 @@ mod tests {
     #[tokio::test]
     async fn test_auth_error_response() {
         let error = AppError::Auth("Invalid token".to_string());
+        let response = error.into_response();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(get_response_body(response).await, "Invalid token");
+    }
+
+    #[tokio::test]
+    async fn test_unauthorized_error_response() {
+        let error = AppError::Unauthorized {
+            message: "Invalid token".to_string(),
+            client_ip: "192.168.1.1".to_string(),
+            path: "/protected".to_string(),
+        };
         let response = error.into_response();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
         assert_eq!(get_response_body(response).await, "Invalid token");

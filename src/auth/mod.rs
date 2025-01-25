@@ -1,7 +1,9 @@
 use crate::{config::Config, error::AppError};
 use axum::{
     extract::{Query, State},
-    response::Redirect,
+    response::{IntoResponse, Redirect, Response},
+    http::StatusCode,
+    body::Body,
 };
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -47,7 +49,7 @@ pub async fn login(State(config): State<Config>) -> Redirect {
 pub async fn callback(
     State(config): State<Config>,
     Query(params): Query<AuthCallback>,
-) -> Result<Redirect, AppError> {
+) -> Result<impl IntoResponse, AppError> {
     let code = params
         .code
         .ok_or_else(|| AppError::Auth("No authorization code provided".into()))?;
@@ -56,11 +58,21 @@ pub async fn callback(
         return Err(AppError::Auth(error));
     }
 
-    let _token = exchange_code_for_token(&config, &code).await?;
+    let token = exchange_code_for_token(&config, &code).await?;
     
-    // Here you would typically set up a session or cookie with the token
-    // For now, we'll redirect to the protected website
-    Ok(Redirect::to(&config.protected_website_url))
+    // Create a session cookie with the access token
+    let is_https = config.server_domain.starts_with("https://");
+    let cookie = crate::session::create_session_cookie(&token.access_token, is_https);
+    
+    // Build response with cookie and redirect
+    let response = Response::builder()
+        .status(StatusCode::FOUND)
+        .header("location", &config.protected_website_url)
+        .header("set-cookie", cookie.to_string())
+        .body(Body::empty())
+        .map_err(|e| AppError::Internal(format!("Failed to build response: {}", e)))?;
+
+    Ok(response)
 }
 
 async fn exchange_code_for_token(config: &Config, code: &str) -> Result<TokenResponse, AppError> {
