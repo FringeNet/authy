@@ -1,34 +1,27 @@
-# Authy - Authentication Proxy Service
+# Authy - OAuth2 Authentication Gateway
 
-Authy is a secure authentication proxy service that provides controlled access to internal services through Amazon Cognito authentication. It consists of a React frontend application and a proxy server that securely forwards authenticated requests to protected services.
+Authy is a secure authentication gateway written in Rust that provides controlled access to protected websites through Amazon Cognito authentication. It acts as a secure proxy that ensures only authenticated users can access protected resources.
 
 ## Architecture Overview
 
-The application consists of two main components:
-
-1. **Frontend (React Application)**
-    - User interface for authentication
-    - Integration with Amazon Cognito for secure user management
-    - Protected routes that require authentication
-    - Proxy request handling for authenticated users
-
-2. **Backend (Proxy Server)**
-    - Token validation
-    - Request forwarding to protected services
-    - Security middleware
+The service is a high-performance Rust application that:
+- Handles OAuth2 authentication flow with Amazon Cognito
+- Validates user authentication
+- Proxies authenticated requests to protected websites
+- Provides security through token validation and access control
 
 ## How It Works
 
-1. Users access the React application
-2. They are presented with a login screen powered by Amazon Cognito
+1. User attempts to access a protected resource
+2. They are redirected to the Cognito login page
 3. Upon successful authentication:
-    - User receives JWT tokens
-    - Frontend validates tokens
-    - Authenticated requests are proxied to protected services
-4. All subsequent requests to protected services are:
-    - Authenticated using JWT tokens
-    - Proxied through the backend server
-    - Forwarded to the appropriate internal service
+    - User is redirected back with an authorization code
+    - Server exchanges the code for access tokens
+    - Server validates the tokens
+    - User is granted access to the protected resource
+4. All subsequent requests are:
+    - Validated using JWT tokens
+    - Proxied to the protected website after validation
 
 ## Protected Service Access
 
@@ -41,54 +34,88 @@ The main benefit of this setup is that internal services remain unexposed to the
 
 1. **AWS Cognito Setup**
     - User Pool configuration
-    - App Client setup
-    - Required environment variables:
-        - COGNITO_USER_POOL_ID
-        - COGNITO_CLIENT_ID
-        - COGNITO_REGION
+    - App Client setup with OAuth2 enabled
+    - Configure callback URLs
+    - Set up hosted UI domain
 
-2. **Frontend Configuration**
-    - React application setup
-    - Environment variables for Cognito configuration
-    - Proxy configuration
-
-3. **Backend Configuration**
-    - Proxy server setup
-    - Token validation middleware
-    - Service routing configuration
+2. **Rust Setup**
+    - Install Rust using [rustup](https://rustup.rs/)
+    - Clone this repository
+    - Copy `.env.example` to `.env` and configure it
 
 ## Development
 
 ```bash
-# Install dependencies
-npm install
+# Build the project
+cargo build
 
-# Start development server
-npm run dev
+# Run in development mode
+cargo run
+
+# Run tests
+cargo test
 
 # Build for production
-npm run build
+cargo build --release
+```
+
+## Environment Variables
+
+```env
+# AWS Cognito Configuration
+COGNITO_DOMAIN=https://your-domain.auth.region.amazoncognito.com
+COGNITO_CLIENT_ID=your-client-id
+COGNITO_CLIENT_SECRET=your-client-secret
+SERVER_DOMAIN=http://your-server-domain
+
+# Protected Resource
+PROTECTED_WEBSITE_URL=https://website-to-protect.com
+
+# Server Configuration
+PORT=3000
+RUST_LOG=info
 ```
 
 ## Security Considerations
 
 - All communication uses HTTPS
-- JWT tokens are validated on every request
-- Protected services are never directly exposed
-- Regular token rotation
+- OAuth2 authorization code flow
+- JWT token validation on every request
+- Protected resources never directly exposed
 - Secure session management
+- IP-based access logging
+- Unauthorized access monitoring
+- Memory-safe implementation in Rust
 
-## Environment Variables
+## Project Structure
 
-```env
-# AWS Cognito
-COGNITO_USER_POOL_ID=your-pool-id
-COGNITO_CLIENT_ID=your-client-id
-COGNITO_REGION=your-region
-
-# Proxy Configuration
-PROXY_TARGET=http://localhost:your-service-port
 ```
+src/
+├── auth/       # Authentication handling
+├── config/     # Configuration management
+├── error/      # Error types and handling
+├── proxy/      # Proxy implementation
+└── main.rs     # Application entry point
+```
+
+## Features
+
+- **High Performance**: Built with Rust for optimal performance and resource usage
+- **Memory Safety**: Leverages Rust's memory safety guarantees
+- **Async I/O**: Uses Tokio for asynchronous I/O operations
+- **Error Handling**: Comprehensive error handling with custom error types
+- **Logging**: Structured logging with different log levels
+- **CORS Support**: Configurable CORS settings
+- **Header Filtering**: Intelligent handling of HTTP headers
+- **Request Streaming**: Efficient streaming of request/response bodies
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
 
