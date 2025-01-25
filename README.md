@@ -2,93 +2,48 @@
 
 Authy is a secure authentication gateway written in Rust that provides controlled access to protected websites through Amazon Cognito authentication. It acts as a secure proxy that ensures only authenticated users can access protected resources.
 
-## Architecture Overview
+## Features
 
-The service is a high-performance Rust application that:
-- Handles OAuth2 authentication flow with Amazon Cognito
-- Validates user authentication
-- Proxies authenticated requests to protected websites
-- Provides security through token validation and access control
+- **OAuth2 Authentication**: Seamless integration with AWS Cognito
+- **Secure Proxy**: Authenticated access to protected websites
+- **High Performance**: Built with Rust for optimal speed and resource usage
+- **Docker Ready**: Easy deployment with Docker and docker-compose
+- **Health Checks**: Built-in health monitoring
+- **CORS Support**: Configurable cross-origin resource sharing
+- **Logging**: Structured logging with configurable levels
+- **Memory Safe**: Leverages Rust's safety guarantees
+- **Async I/O**: Efficient request handling with Tokio
+- **Streaming**: Efficient handling of large requests/responses
 
-## How It Works
+## Quick Start
 
-1. User attempts to access a protected resource
-2. They are redirected to the Cognito login page
-3. Upon successful authentication:
-    - User is redirected back with an authorization code
-    - Server exchanges the code for access tokens
-    - Server validates the tokens
-    - User is granted access to the protected resource
-4. All subsequent requests are:
-    - Validated using JWT tokens
-    - Proxied to the protected website after validation
+### Using Docker Compose (Recommended)
 
-## Protected Service Access
-
-The main benefit of this setup is that internal services remain unexposed to the public internet. Instead:
-- Services run only on localhost
-- Access is only possible through the authenticated proxy
-- Additional security layer through token validation
-
-## Setup Requirements
-
-1. **AWS Cognito Setup**
-    - User Pool configuration
-    - App Client setup with OAuth2 enabled
-    - Configure callback URLs
-    - Set up hosted UI domain
-
-2. **Rust Setup**
-    - Install Rust using [rustup](https://rustup.rs/)
-    - Clone this repository
-    - Copy `.env.example` to `.env` and configure it
-
-## Development
-
-### Local Development
-
+1. Clone the repository:
 ```bash
-# Build the project
-cargo build
-
-# Run in development mode
-cargo run
-
-# Run tests
-cargo test
-
-# Build for production
-cargo build --release
+git clone https://github.com/FringeNet/authy.git
+cd authy
 ```
 
-### Docker Deployment
-
-The service can be run using Docker in two ways:
-
-1. Using docker-compose (recommended):
+2. Configure environment:
 ```bash
-# Copy example environment file
 cp .env.example .env
-
-# Edit environment variables
-vim .env
-
-# Start the service
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Stop the service
-docker-compose down
+# Edit .env with your AWS Cognito and service configuration
 ```
 
-2. Using Docker directly:
+3. Start the service:
 ```bash
-# Build the image
-docker build -t authy .
+docker-compose up -d
+```
 
-# Run the container
+4. Check the service:
+```bash
+curl http://localhost:3000/health
+```
+
+### Using Docker
+
+```bash
 docker run -d \
   -p 3000:3000 \
   -e COGNITO_DOMAIN=https://your-domain.auth.region.amazoncognito.com \
@@ -96,71 +51,137 @@ docker run -d \
   -e COGNITO_CLIENT_SECRET=your-client-secret \
   -e SERVER_DOMAIN=http://your-server-domain \
   -e PROTECTED_WEBSITE_URL=https://website-to-protect.com \
-  -e PORT=3000 \
-  -e RUST_LOG=info \
   --name authy \
-  authy
-
-# View logs
-docker logs -f authy
-
-# Stop the container
-docker stop authy
+  ghcr.io/fringenet/authy:latest
 ```
+
+### Local Development
+
+1. Install Rust:
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+2. Build and run:
+```bash
+# Development
+cargo run
+
+# Run tests
+cargo test
+
+# Production build
+cargo build --release
+```
+
+## Configuration
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `COGNITO_DOMAIN` | AWS Cognito domain URL | Required |
-| `COGNITO_CLIENT_ID` | AWS Cognito client ID | Required |
-| `COGNITO_CLIENT_SECRET` | AWS Cognito client secret | Required |
-| `SERVER_DOMAIN` | Public domain where this service is hosted | Required |
-| `PROTECTED_WEBSITE_URL` | URL of the website to protect | Required |
-| `PORT` | Port to listen on | 3000 |
-| `RUST_LOG` | Log level (error, warn, info, debug, trace) | info |
+| Variable | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `COGNITO_DOMAIN` | AWS Cognito domain URL | Yes | - |
+| `COGNITO_CLIENT_ID` | AWS Cognito client ID | Yes | - |
+| `COGNITO_CLIENT_SECRET` | AWS Cognito client secret | Yes | - |
+| `SERVER_DOMAIN` | Public domain of this service | Yes | - |
+| `PROTECTED_WEBSITE_URL` | URL to protect | Yes | - |
+| `PORT` | Server port | No | 3000 |
+| `RUST_LOG` | Log level | No | info |
+
+### AWS Cognito Setup
+
+1. Create a User Pool in AWS Cognito
+2. Configure an App Client:
+   - Enable OAuth2
+   - Add callback URLs
+   - Configure hosted UI
+3. Note down the domain, client ID, and secret
+
+## Architecture
+
+```mermaid
+graph LR
+    User --> Authy
+    Authy --> Cognito[AWS Cognito]
+    Authy --> Website[Protected Website]
 ```
 
-## Security Considerations
+1. **Authentication Flow**:
+   - User attempts to access protected resource
+   - Redirected to Cognito login
+   - After login, receives authorization code
+   - Code exchanged for access token
+   - Access granted to protected resource
 
-- All communication uses HTTPS
+2. **Proxy Flow**:
+   - Incoming request validated
+   - JWT token verified
+   - Request proxied to protected website
+   - Response streamed back to user
+
+## API Endpoints
+
+- `GET /` - Entry point, redirects to login
+- `GET /callback` - OAuth2 callback handler
+- `GET /health` - Health check endpoint
+- `/*` - Proxied to protected website
+
+## Security Features
+
 - OAuth2 authorization code flow
-- JWT token validation on every request
-- Protected resources never directly exposed
-- Secure session management
-- IP-based access logging
-- Unauthorized access monitoring
-- Memory-safe implementation in Rust
+- HTTPS communication
+- JWT token validation
+- Request/response streaming
+- Header filtering
+- CORS configuration
+- Non-root Docker user
+- Health monitoring
+- Access logging
 
-## Project Structure
+## Development
+
+### Project Structure
 
 ```
 src/
-├── auth/       # Authentication handling
-├── config/     # Configuration management
-├── error/      # Error types and handling
-├── proxy/      # Proxy implementation
-└── main.rs     # Application entry point
+├── auth/     # Authentication handling
+├── config/   # Configuration management
+├── error/    # Error types and handling
+├── proxy/    # Proxy implementation
+└── main.rs   # Application entry point
 ```
 
-## Features
+### Testing
 
-- **High Performance**: Built with Rust for optimal performance and resource usage
-- **Memory Safety**: Leverages Rust's memory safety guarantees
-- **Async I/O**: Uses Tokio for asynchronous I/O operations
-- **Error Handling**: Comprehensive error handling with custom error types
-- **Logging**: Structured logging with different log levels
-- **CORS Support**: Configurable CORS settings
-- **Header Filtering**: Intelligent handling of HTTP headers
-- **Request Streaming**: Efficient streaming of request/response bodies
+```bash
+# Run all tests
+cargo test
+
+# Run with logging
+RUST_LOG=debug cargo test
+
+# Run specific test
+cargo test test_name
+```
+
+### Docker Build
+
+```bash
+# Build image
+docker build -t authy .
+
+# Build with different target
+docker build --target builder .
+```
 
 ## Contributing
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create feature branch (`git checkout -b feature/xyz`)
+3. Make changes and test
+4. Commit (`git commit -am 'Add xyz'`)
+5. Push (`git push origin feature/xyz`)
+6. Create Pull Request
 
 ## License
 
