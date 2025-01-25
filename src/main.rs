@@ -2,14 +2,18 @@ mod auth;
 mod config;
 mod error;
 mod proxy;
+mod session;
+mod middleware;
 
 use axum::{
-    routing::{get, any},
+    routing::get,
     Router,
-    http::{Method, HeaderName, HeaderValue, StatusCode, header::{AUTHORIZATION, ACCEPT, CONTENT_TYPE}},
+    http::{Method, HeaderName, HeaderValue, StatusCode, header::{AUTHORIZATION, ACCEPT, CONTENT_TYPE}, Request},
     response::IntoResponse,
+    extract::State,
+    body::Body,
 };
-use config::Config;
+use crate::{config::Config, proxy::proxy_request};
 use dotenv::dotenv;
 use std::{net::SocketAddr, time::Duration};
 use tower_http::cors::{Any, CorsLayer};
@@ -40,8 +44,11 @@ async fn main() {
         .route("/", get(auth::login))
         .route("/callback", get(auth::callback))
         .route("/health", get(health_check))
-        .fallback(any(proxy::proxy_request))
+        .fallback(|State(config): State<Config>, req: Request<Body>| async move {
+            proxy_request(State(config), req).await
+        })
         .layer(cors)
+        .layer(axum::middleware::from_fn(middleware::access_log))
         .with_state(config);
 
 fn build_cors_layer(config: &Config) -> CorsLayer {
@@ -87,7 +94,7 @@ async fn health_check() -> impl IntoResponse {
     
     axum::serve(
         tokio::net::TcpListener::bind(addr).await.unwrap(),
-        app.into_make_service(),
+        app.into_make_service_with_connect_info::<SocketAddr>(),
     )
     .await
     .unwrap();

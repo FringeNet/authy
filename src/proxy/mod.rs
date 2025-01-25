@@ -3,16 +3,17 @@ use axum::{
     body::{Body, to_bytes},
     extract::State,
     http::{HeaderName, HeaderValue, Request, Response, StatusCode},
-    response::IntoResponse,
+
 };
 use std::str::FromStr;
-
 
 pub async fn proxy_request(
     State(config): State<Config>,
     req: Request<Body>,
-) -> Result<impl IntoResponse, AppError> {
-    // TODO: Validate JWT token from session/cookie
+) -> Result<Response<Body>, AppError> {
+    // Validate JWT token from session/cookie
+    let (session, req) = crate::session::validate_session(req).await?;
+    println!("Request from user: {}", session.claims.sub);
     
     // Create client
     let client = reqwest::Client::builder()
@@ -148,8 +149,8 @@ pub async fn proxy_request(
         }
     }
 
-    Ok(builder.body(Body::from(body))
-        .map_err(|e| AppError::Internal(format!("Failed to build response: {}", e)))?)
+    builder.body(Body::from(body))
+        .map_err(|e| AppError::Internal(format!("Failed to build response: {}", e)))
 }
 
 fn is_hop_header(name: &HeaderName) -> bool {
@@ -218,10 +219,11 @@ mod tests {
             .method(Method::GET)
             .uri("/test")
             .header("accept", "text/plain")
+            .header("cookie", "authy_session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjk5OTk5OTk5OTksImlzcyI6Imh0dHBzOi8vdGVzdC5hdXRoLmFtYXpvbmNvZ25pdG8uY29tIiwiYXVkIjoieW91ci1hcHAtY2xpZW50LWlkIn0.2PVhQqORt8-2j9uqHEGhEz0dGfYVVPRLFPf7DQoqw8Q")
             .body(Body::empty())
             .unwrap();
 
-        let mut response = proxy_request(State(config), request).await.unwrap().into_response();
+        let mut response = proxy_request(State(config), request).await.unwrap();
         
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
@@ -246,10 +248,11 @@ mod tests {
         let request = Request::builder()
             .method(Method::GET)
             .uri("/test?param=value")
+            .header("cookie", "authy_session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjk5OTk5OTk5OTksImlzcyI6Imh0dHBzOi8vdGVzdC5hdXRoLmFtYXpvbmNvZ25pdG8uY29tIiwiYXVkIjoieW91ci1hcHAtY2xpZW50LWlkIn0.2PVhQqORt8-2j9uqHEGhEz0dGfYVVPRLFPf7DQoqw8Q")
             .body(Body::empty())
             .unwrap();
 
-        let mut response = proxy_request(State(config), request).await.unwrap().into_response();
+        let mut response = proxy_request(State(config), request).await.unwrap();
         
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(get_response_body(&mut response).await, "test with query");
@@ -270,10 +273,11 @@ mod tests {
         let request = Request::builder()
             .method(Method::GET)
             .uri("/error")
+            .header("cookie", "authy_session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjk5OTk5OTk5OTksImlzcyI6Imh0dHBzOi8vdGVzdC5hdXRoLmFtYXpvbmNvZ25pdG8uY29tIiwiYXVkIjoieW91ci1hcHAtY2xpZW50LWlkIn0.2PVhQqORt8-2j9uqHEGhEz0dGfYVVPRLFPf7DQoqw8Q")
             .body(Body::empty())
             .unwrap();
 
-        let mut response = proxy_request(State(config), request).await.unwrap().into_response();
+        let mut response = proxy_request(State(config), request).await.unwrap();
         
         assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
         assert_eq!(get_response_body(&mut response).await, "server error");
@@ -300,10 +304,11 @@ mod tests {
             .uri("/secure")
             .header("x-forwarded-proto", "https")
             .header("host", "auth.example.com")
+            .header("cookie", "authy_session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjk5OTk5OTk5OTksImlzcyI6Imh0dHBzOi8vdGVzdC5hdXRoLmFtYXpvbmNvZ25pdG8uY29tIiwiYXVkIjoieW91ci1hcHAtY2xpZW50LWlkIn0.2PVhQqORt8-2j9uqHEGhEz0dGfYVVPRLFPf7DQoqw8Q")
             .body(Body::empty())
             .unwrap();
 
-        let mut response = proxy_request(State(config), request).await.unwrap().into_response();
+        let mut response = proxy_request(State(config), request).await.unwrap();
         
         assert_eq!(response.status(), StatusCode::OK);
         let body = get_response_body(&mut response).await;
@@ -344,11 +349,12 @@ mod tests {
             .uri("/redirect")
             .header("x-forwarded-proto", "https")
             .header("host", "auth.example.com")
+            .header("cookie", "authy_session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjk5OTk5OTk5OTksImlzcyI6Imh0dHBzOi8vdGVzdC5hdXRoLmFtYXpvbmNvZ25pdG8uY29tIiwiYXVkIjoieW91ci1hcHAtY2xpZW50LWlkIn0.2PVhQqORt8-2j9uqHEGhEz0dGfYVVPRLFPf7DQoqw8Q")
             .body(Body::empty())
             .unwrap();
         println!("Request URI: {}", request.uri());
 
-        let response = proxy_request(State(config), request).await.unwrap().into_response();
+        let response = proxy_request(State(config), request).await.unwrap();
         
         assert_eq!(response.status(), StatusCode::FOUND);
         let location = response.headers().get("location").unwrap();
@@ -356,8 +362,6 @@ mod tests {
 
         // Verify that the mock was called
         mock_server.verify().await;
-
-
     }
 
     #[test]
