@@ -26,9 +26,33 @@ The service is a high-performance Rust application that:
 ## Protected Service Access
 
 The main benefit of this setup is that internal services remain unexposed to the public internet. Instead:
-- Services run only on localhost
-- Access is only possible through the authenticated proxy
+- Protected resources run only on localhost using unexposed ports
+- The authentication proxy (Authy) runs on a publicly accessible port
+- All external traffic goes through Authy, which handles authentication
+- Internal services are completely isolated from direct public access
 - Additional security layer through token validation
+
+### Port Configuration Example:
+```
+                   Public Internet
+                         │
+                         ▼
+             [Public Port - Exposed]
+                    ┌─────────┐
+                    │  Authy  │
+                    └────┬────┘
+                         │
+                         ▼
+            [Private Port - Unexposed]
+              ┌──────────────────────┐
+              │  Protected Resource  │
+              └──────────────────────┘
+```
+
+In this setup:
+- Authy runs on a publicly accessible port
+- Protected resources run on unexposed local ports
+- All access to protected resources must pass through Authy's authentication
 
 ## Setup Requirements
 
