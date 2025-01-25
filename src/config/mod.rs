@@ -9,10 +9,18 @@ pub struct Config {
     pub server_domain: String,
     pub protected_website_url: String,
     pub port: u16,
+    pub cors_allowed_origins: Vec<String>,
+    pub behind_proxy: bool,
 }
 
 impl Config {
     pub fn from_env() -> Result<Self, env::VarError> {
+        let cors_origins = env::var("CORS_ALLOWED_ORIGINS")
+            .unwrap_or_else(|_| String::from("*"))
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .collect();
+
         Ok(Config {
             cognito_domain: env::var("COGNITO_DOMAIN")?,
             cognito_client_id: env::var("COGNITO_CLIENT_ID")?,
@@ -20,6 +28,10 @@ impl Config {
             server_domain: env::var("SERVER_DOMAIN")?,
             protected_website_url: env::var("PROTECTED_WEBSITE_URL")?,
             port: env::var("PORT")?.parse().unwrap_or(3000),
+            cors_allowed_origins: cors_origins,
+            behind_proxy: env::var("BEHIND_PROXY")
+                .map(|v| v.to_lowercase() == "true")
+                .unwrap_or(false),
         })
     }
 }

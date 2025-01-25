@@ -6,10 +6,12 @@ mod proxy;
 use axum::{
     routing::{get, any},
     Router,
+    http::{Method, HeaderName, HeaderValue, StatusCode, header::{AUTHORIZATION, ACCEPT, CONTENT_TYPE}},
+    response::IntoResponse,
 };
 use config::Config;
 use dotenv::dotenv;
-use std::net::SocketAddr;
+use std::{net::SocketAddr, time::Duration};
 use tower_http::cors::{Any, CorsLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -31,10 +33,7 @@ async fn main() {
     let port = config.port;
 
     // Configure CORS
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+    let cors = build_cors_layer(&config);
 
     // Build application
     let app = Router::new()
@@ -44,6 +43,39 @@ async fn main() {
         .fallback(any(proxy::proxy_request))
         .layer(cors)
         .with_state(config);
+
+fn build_cors_layer(config: &Config) -> CorsLayer {
+    if config.cors_allowed_origins.contains(&"*".to_string()) {
+        CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any)
+            .allow_credentials(true)
+            .max_age(Duration::from_secs(3600))
+    } else {
+        CorsLayer::new()
+            .allow_origin(config.cors_allowed_origins.iter().map(|origin| {
+                origin.parse::<HeaderValue>().unwrap_or_else(|_| {
+                    HeaderValue::from_static("http://localhost:3000")
+                })
+            }).collect::<Vec<_>>())
+            .allow_methods([
+                Method::GET,
+                Method::POST,
+                Method::PUT,
+                Method::DELETE,
+                Method::OPTIONS,
+            ])
+            .allow_headers([
+                AUTHORIZATION,
+                ACCEPT,
+                CONTENT_TYPE,
+                HeaderName::from_static("x-requested-with"),
+            ])
+            .allow_credentials(true)
+            .max_age(Duration::from_secs(3600))
+    }
+}
 
 async fn health_check() -> impl IntoResponse {
     StatusCode::OK
