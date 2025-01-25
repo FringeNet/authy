@@ -6,14 +6,14 @@ mod proxy;
 use axum::{
     routing::{get, any},
     Router,
-    http::{Method, HeaderName, HeaderValue},
+    http::{Method, HeaderName, HeaderValue, StatusCode, header::{AUTHORIZATION, ACCEPT, CONTENT_TYPE}},
+    response::IntoResponse,
 };
 use config::Config;
 use dotenv::dotenv;
-use std::net::SocketAddr;
+use std::{net::SocketAddr, time::Duration};
 use tower_http::cors::{Any, CorsLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use http::header::{AUTHORIZATION, ACCEPT, CONTENT_TYPE};
 
 #[tokio::main]
 async fn main() {
@@ -33,13 +33,25 @@ async fn main() {
     let port = config.port;
 
     // Configure CORS
-    let cors = if config.cors_allowed_origins.contains(&"*".to_string()) {
+    let cors = build_cors_layer(&config);
+
+    // Build application
+    let app = Router::new()
+        .route("/", get(auth::login))
+        .route("/callback", get(auth::callback))
+        .route("/health", get(health_check))
+        .fallback(any(proxy::proxy_request))
+        .layer(cors)
+        .with_state(config);
+
+fn build_cors_layer(config: &Config) -> CorsLayer {
+    if config.cors_allowed_origins.contains(&"*".to_string()) {
         CorsLayer::new()
             .allow_origin(Any)
             .allow_methods(Any)
             .allow_headers(Any)
             .allow_credentials(true)
-            .max_age(3600)
+            .max_age(Duration::from_secs(3600))
     } else {
         CorsLayer::new()
             .allow_origin(config.cors_allowed_origins.iter().map(|origin| {
@@ -61,17 +73,9 @@ async fn main() {
                 HeaderName::from_static("x-requested-with"),
             ])
             .allow_credentials(true)
-            .max_age(3600)
-    };
-
-    // Build application
-    let app = Router::new()
-        .route("/", get(auth::login))
-        .route("/callback", get(auth::callback))
-        .route("/health", get(health_check))
-        .fallback(any(proxy::proxy_request))
-        .layer(cors)
-        .with_state(config);
+            .max_age(Duration::from_secs(3600))
+    }
+}
 
 async fn health_check() -> impl IntoResponse {
     StatusCode::OK

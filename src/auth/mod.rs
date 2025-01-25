@@ -97,16 +97,22 @@ mod tests {
         Mock, MockServer, ResponseTemplate,
     };
 
-    #[tokio::test]
-    async fn test_login_redirect() {
-        let config = Config {
-            cognito_domain: "https://test.auth.region.amazoncognito.com".to_string(),
+    fn create_test_config(cognito_domain: String) -> Config {
+        Config {
+            cognito_domain,
             cognito_client_id: "test-client-id".to_string(),
             cognito_client_secret: "test-client-secret".to_string(),
             server_domain: "http://localhost:3000".to_string(),
             protected_website_url: "https://test-website.com".to_string(),
             port: 3000,
-        };
+            cors_allowed_origins: vec!["*".to_string()],
+            behind_proxy: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_login_redirect() {
+        let config = create_test_config("https://test.auth.region.amazoncognito.com".to_string());
 
         let response = login(State(config)).await.into_response();
         let location = response.headers().get("location").unwrap().to_str().unwrap();
@@ -120,14 +126,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_callback_no_code() {
-        let config = Config {
-            cognito_domain: "https://test.auth.amazoncognito.com".to_string(),
-            cognito_client_id: "test-client-id".to_string(),
-            cognito_client_secret: "test-client-secret".to_string(),
-            server_domain: "http://localhost:3000".to_string(),
-            protected_website_url: "https://test-website.com".to_string(),
-            port: 3000,
-        };
+        let config = create_test_config("https://test.auth.amazoncognito.com".to_string());
 
         let params = AuthCallback {
             code: None,
@@ -140,14 +139,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_callback_with_error() {
-        let config = Config {
-            cognito_domain: "https://test.auth.amazoncognito.com".to_string(),
-            cognito_client_id: "test-client-id".to_string(),
-            cognito_client_secret: "test-client-secret".to_string(),
-            server_domain: "http://localhost:3000".to_string(),
-            protected_website_url: "https://test-website.com".to_string(),
-            port: 3000,
-        };
+        let config = create_test_config("https://test.auth.amazoncognito.com".to_string());
 
         let params = AuthCallback {
             code: Some("test-code".to_string()),
@@ -175,14 +167,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let config = Config {
-            cognito_domain: mock_server.uri(),
-            cognito_client_id: "test-client-id".to_string(),
-            cognito_client_secret: "test-client-secret".to_string(),
-            server_domain: "http://localhost:3000".to_string(),
-            protected_website_url: "https://test-website.com".to_string(),
-            port: 3000,
-        };
+        let config = create_test_config(mock_server.uri());
 
         let result = exchange_code_for_token(&config, "test-code").await.unwrap();
         assert_eq!(result, token_response);
@@ -198,14 +183,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let config = Config {
-            cognito_domain: mock_server.uri(),
-            cognito_client_id: "test-client-id".to_string(),
-            cognito_client_secret: "test-client-secret".to_string(),
-            server_domain: "http://localhost:3000".to_string(),
-            protected_website_url: "https://test-website.com".to_string(),
-            port: 3000,
-        };
+        let config = create_test_config(mock_server.uri());
 
         let result = exchange_code_for_token(&config, "invalid-code").await;
         assert!(matches!(result, Err(AppError::Auth(msg)) if msg == "invalid_grant"));
