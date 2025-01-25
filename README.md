@@ -1,6 +1,10 @@
 # Authy - OAuth2 Authentication Gateway
 
-Authy is a secure authentication gateway written in Rust that provides controlled access to protected websites through Amazon Cognito authentication. It acts as a secure proxy that ensures only authenticated users can access protected resources.
+Authy is a secure authentication gateway written in Rust that provides controlled access to protected websites through Amazon Cognito authentication. It acts as a secure proxy that ensures only authenticated users can access protected resources. 
+
+# ALPHA
+
+Authy is still in alpha, not everything works yet.
 
 ## Architecture Overview
 
