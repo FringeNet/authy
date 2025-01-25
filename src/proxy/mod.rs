@@ -94,3 +94,137 @@ fn is_hop_header_str(name: &str) -> bool {
             | "upgrade"
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::{Method, Request};
+    use http_body_util::BodyExt;
+    use wiremock::{
+        matchers::{method, path},
+        Mock, MockServer, ResponseTemplate,
+    };
+
+    async fn get_response_body(response: Response<Body>) -> String {
+        let body = response.into_body();
+        let bytes = body.collect().await.unwrap().to_bytes();
+        String::from_utf8(bytes.to_vec()).unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_proxy_request_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/test"))
+            .respond_with(ResponseTemplate::new(200)
+                .set_body_string("test response")
+                .insert_header("content-type", "text/plain"))
+            .mount(&mock_server)
+            .await;
+
+        let config = Config {
+            cognito_domain: "https://test.auth.amazoncognito.com".to_string(),
+            cognito_client_id: "test-client-id".to_string(),
+            cognito_client_secret: "test-client-secret".to_string(),
+            server_domain: "http://localhost:3000".to_string(),
+            protected_website_url: mock_server.uri(),
+            port: 3000,
+        };
+
+        let request = Request::builder()
+            .method(Method::GET)
+            .uri("/test")
+            .header("accept", "text/plain")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = proxy_request(State(config), request).await.unwrap().into_response();
+        
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "text/plain"
+        );
+        assert_eq!(get_response_body(response).await, "test response");
+    }
+
+    #[tokio::test]
+    async fn test_proxy_request_with_query() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/test"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("test with query"))
+            .mount(&mock_server)
+            .await;
+
+        let config = Config {
+            cognito_domain: "https://test.auth.amazoncognito.com".to_string(),
+            cognito_client_id: "test-client-id".to_string(),
+            cognito_client_secret: "test-client-secret".to_string(),
+            server_domain: "http://localhost:3000".to_string(),
+            protected_website_url: mock_server.uri(),
+            port: 3000,
+        };
+
+        let request = Request::builder()
+            .method(Method::GET)
+            .uri("/test?param=value")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = proxy_request(State(config), request).await.unwrap().into_response();
+        
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(get_response_body(response).await, "test with query");
+    }
+
+    #[tokio::test]
+    async fn test_proxy_request_error() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/error"))
+            .respond_with(ResponseTemplate::new(500).set_body_string("server error"))
+            .mount(&mock_server)
+            .await;
+
+        let config = Config {
+            cognito_domain: "https://test.auth.amazoncognito.com".to_string(),
+            cognito_client_id: "test-client-id".to_string(),
+            cognito_client_secret: "test-client-secret".to_string(),
+            server_domain: "http://localhost:3000".to_string(),
+            protected_website_url: mock_server.uri(),
+            port: 3000,
+        };
+
+        let request = Request::builder()
+            .method(Method::GET)
+            .uri("/error")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = proxy_request(State(config), request).await.unwrap().into_response();
+        
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(get_response_body(response).await, "server error");
+    }
+
+    #[test]
+    fn test_is_hop_header() {
+        assert!(is_hop_header_str("connection"));
+        assert!(is_hop_header_str("keep-alive"));
+        assert!(is_hop_header_str("proxy-authenticate"));
+        assert!(is_hop_header_str("proxy-authorization"));
+        assert!(is_hop_header_str("te"));
+        assert!(is_hop_header_str("trailer"));
+        assert!(is_hop_header_str("transfer-encoding"));
+        assert!(is_hop_header_str("upgrade"));
+
+        assert!(!is_hop_header_str("content-type"));
+        assert!(!is_hop_header_str("authorization"));
+        assert!(!is_hop_header_str("accept"));
+    }
+}

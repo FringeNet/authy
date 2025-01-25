@@ -20,7 +20,7 @@ struct TokenRequest {
     redirect_uri: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct TokenResponse {
     access_token: String,
     token_type: String,
@@ -85,4 +85,129 @@ async fn exchange_code_for_token(config: &Config, code: &str) -> Result<TokenRes
     }
 
     response.json::<TokenResponse>().await.map_err(AppError::Request)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::response::IntoResponse;
+
+    use wiremock::{
+        matchers::{method, path},
+        Mock, MockServer, ResponseTemplate,
+    };
+
+    #[tokio::test]
+    async fn test_login_redirect() {
+        let config = Config {
+            cognito_domain: "https://test.auth.region.amazoncognito.com".to_string(),
+            cognito_client_id: "test-client-id".to_string(),
+            cognito_client_secret: "test-client-secret".to_string(),
+            server_domain: "http://localhost:3000".to_string(),
+            protected_website_url: "https://test-website.com".to_string(),
+            port: 3000,
+        };
+
+        let response = login(State(config)).await.into_response();
+        let location = response.headers().get("location").unwrap().to_str().unwrap();
+        
+        assert!(location.starts_with("https://test.auth.region.amazoncognito.com/login"));
+        assert!(location.contains("client_id=test-client-id"));
+        assert!(location.contains("response_type=code"));
+        assert!(location.contains("scope=openid"));
+        assert!(location.contains("redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fcallback"));
+    }
+
+    #[tokio::test]
+    async fn test_callback_no_code() {
+        let config = Config {
+            cognito_domain: "https://test.auth.amazoncognito.com".to_string(),
+            cognito_client_id: "test-client-id".to_string(),
+            cognito_client_secret: "test-client-secret".to_string(),
+            server_domain: "http://localhost:3000".to_string(),
+            protected_website_url: "https://test-website.com".to_string(),
+            port: 3000,
+        };
+
+        let params = AuthCallback {
+            code: None,
+            error: None,
+        };
+
+        let result = callback(State(config), Query(params)).await;
+        assert!(matches!(result, Err(AppError::Auth(msg)) if msg == "No authorization code provided"));
+    }
+
+    #[tokio::test]
+    async fn test_callback_with_error() {
+        let config = Config {
+            cognito_domain: "https://test.auth.amazoncognito.com".to_string(),
+            cognito_client_id: "test-client-id".to_string(),
+            cognito_client_secret: "test-client-secret".to_string(),
+            server_domain: "http://localhost:3000".to_string(),
+            protected_website_url: "https://test-website.com".to_string(),
+            port: 3000,
+        };
+
+        let params = AuthCallback {
+            code: Some("test-code".to_string()),
+            error: Some("access_denied".to_string()),
+        };
+
+        let result = callback(State(config), Query(params)).await;
+        assert!(matches!(result, Err(AppError::Auth(msg)) if msg == "access_denied"));
+    }
+
+    #[tokio::test]
+    async fn test_exchange_code_success() {
+        let mock_server = MockServer::start().await;
+        
+        let token_response = TokenResponse {
+            access_token: "test-access-token".to_string(),
+            token_type: "Bearer".to_string(),
+            expires_in: 3600,
+            id_token: Some("test-id-token".to_string()),
+        };
+
+        Mock::given(method("POST"))
+            .and(path("/oauth2/token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&token_response))
+            .mount(&mock_server)
+            .await;
+
+        let config = Config {
+            cognito_domain: mock_server.uri(),
+            cognito_client_id: "test-client-id".to_string(),
+            cognito_client_secret: "test-client-secret".to_string(),
+            server_domain: "http://localhost:3000".to_string(),
+            protected_website_url: "https://test-website.com".to_string(),
+            port: 3000,
+        };
+
+        let result = exchange_code_for_token(&config, "test-code").await.unwrap();
+        assert_eq!(result, token_response);
+    }
+
+    #[tokio::test]
+    async fn test_exchange_code_failure() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/oauth2/token"))
+            .respond_with(ResponseTemplate::new(400).set_body_string("invalid_grant"))
+            .mount(&mock_server)
+            .await;
+
+        let config = Config {
+            cognito_domain: mock_server.uri(),
+            cognito_client_id: "test-client-id".to_string(),
+            cognito_client_secret: "test-client-secret".to_string(),
+            server_domain: "http://localhost:3000".to_string(),
+            protected_website_url: "https://test-website.com".to_string(),
+            port: 3000,
+        };
+
+        let result = exchange_code_for_token(&config, "invalid-code").await;
+        assert!(matches!(result, Err(AppError::Auth(msg)) if msg == "invalid_grant"));
+    }
 }

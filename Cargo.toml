@@ -19,3 +19,11 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 dotenv = "0.15"
 thiserror = "1.0"
 url = "2.5"
+
+[dev-dependencies]
+mockall = "0.12"
+wiremock = "0.5"
+tokio-test = "0.4"
+tower-test = "0.4"
+http-body-util = "0.1"
+assert_matches = "1.5"
