@@ -40,9 +40,14 @@ async fn main() {
     let app = Router::new()
         .route("/", get(auth::login))
         .route("/callback", get(auth::callback))
+        .route("/health", get(health_check))
         .fallback(any(proxy::proxy_request))
         .layer(cors)
         .with_state(config);
+
+async fn health_check() -> impl IntoResponse {
+    StatusCode::OK
+}
 
     // Start server
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
