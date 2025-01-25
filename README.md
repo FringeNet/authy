@@ -7,28 +7,28 @@ Authy is a secure authentication proxy service that provides controlled access t
 The application consists of two main components:
 
 1. **Frontend (React Application)**
-   - User interface for authentication
-   - Integration with Amazon Cognito for secure user management
-   - Protected routes that require authentication
-   - Proxy request handling for authenticated users
+    - User interface for authentication
+    - Integration with Amazon Cognito for secure user management
+    - Protected routes that require authentication
+    - Proxy request handling for authenticated users
 
 2. **Backend (Proxy Server)**
-   - Token validation
-   - Request forwarding to protected services
-   - Security middleware
+    - Token validation
+    - Request forwarding to protected services
+    - Security middleware
 
 ## How It Works
 
 1. Users access the React application
 2. They are presented with a login screen powered by Amazon Cognito
 3. Upon successful authentication:
-   - User receives JWT tokens
-   - Frontend validates tokens
-   - Authenticated requests are proxied to protected services
+    - User receives JWT tokens
+    - Frontend validates tokens
+    - Authenticated requests are proxied to protected services
 4. All subsequent requests to protected services are:
-   - Authenticated using JWT tokens
-   - Proxied through the backend server
-   - Forwarded to the appropriate internal service
+    - Authenticated using JWT tokens
+    - Proxied through the backend server
+    - Forwarded to the appropriate internal service
 
 ## Protected Service Access
 
@@ -40,22 +40,22 @@ The main benefit of this setup is that internal services remain unexposed to the
 ## Setup Requirements
 
 1. **AWS Cognito Setup**
-   - User Pool configuration
-   - App Client setup
-   - Required environment variables:
-     - COGNITO_USER_POOL_ID
-     - COGNITO_CLIENT_ID
-     - COGNITO_REGION
+    - User Pool configuration
+    - App Client setup
+    - Required environment variables:
+        - COGNITO_USER_POOL_ID
+        - COGNITO_CLIENT_ID
+        - COGNITO_REGION
 
 2. **Frontend Configuration**
-   - React application setup
-   - Environment variables for Cognito configuration
-   - Proxy configuration
+    - React application setup
+    - Environment variables for Cognito configuration
+    - Proxy configuration
 
 3. **Backend Configuration**
-   - Proxy server setup
-   - Token validation middleware
-   - Service routing configuration
+    - Proxy server setup
+    - Token validation middleware
+    - Service routing configuration
 
 ## Development
 
