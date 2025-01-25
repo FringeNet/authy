@@ -1,95 +1,50 @@
-# Authy - Authentication Proxy Service
+# React + TypeScript + Vite
 
-Authy is a secure authentication proxy service that provides controlled access to internal services through Amazon Cognito authentication. It consists of a React frontend application and a proxy server that securely forwards authenticated requests to protected services.
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-## Architecture Overview
+Currently, two official plugins are available:
 
-The application consists of two main components:
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-1. **Frontend (React Application)**
-   - User interface for authentication
-   - Integration with Amazon Cognito for secure user management
-   - Protected routes that require authentication
-   - Proxy request handling for authenticated users
+## Expanding the ESLint configuration
 
-2. **Backend (Proxy Server)**
-   - Token validation
-   - Request forwarding to protected services
-   - Security middleware
+If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
 
-## How It Works
+- Configure the top-level `parserOptions` property like this:
 
-1. Users access the React application
-2. They are presented with a login screen powered by Amazon Cognito
-3. Upon successful authentication:
-   - User receives JWT tokens
-   - Frontend validates tokens
-   - Authenticated requests are proxied to protected services
-4. All subsequent requests to protected services are:
-   - Authenticated using JWT tokens
-   - Proxied through the backend server
-   - Forwarded to the appropriate internal service
-
-## Protected Service Access
-
-The main benefit of this setup is that internal services remain unexposed to the public internet. Instead:
-- Services run only on localhost
-- Access is only possible through the authenticated proxy
-- Additional security layer through token validation
-
-## Setup Requirements
-
-1. **AWS Cognito Setup**
-   - User Pool configuration
-   - App Client setup
-   - Required environment variables:
-     - COGNITO_USER_POOL_ID
-     - COGNITO_CLIENT_ID
-     - COGNITO_REGION
-
-2. **Frontend Configuration**
-   - React application setup
-   - Environment variables for Cognito configuration
-   - Proxy configuration
-
-3. **Backend Configuration**
-   - Proxy server setup
-   - Token validation middleware
-   - Service routing configuration
-
-## Development
-
-```bash
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
-
-# Build for production
-npm run build
+```js
+export default tseslint.config({
+  languageOptions: {
+    // other options...
+    parserOptions: {
+      project: ['./tsconfig.node.json', './tsconfig.app.json'],
+      tsconfigRootDir: import.meta.dirname,
+    },
+  },
+})
 ```
 
-## Security Considerations
+- Replace `tseslint.configs.recommended` to `tseslint.configs.recommendedTypeChecked` or `tseslint.configs.strictTypeChecked`
+- Optionally add `...tseslint.configs.stylisticTypeChecked`
+- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and update the config:
 
-- All communication uses HTTPS
-- JWT tokens are validated on every request
-- Protected services are never directly exposed
-- Regular token rotation
-- Secure session management
+```js
+// eslint.config.js
+import react from 'eslint-plugin-react'
 
-## Environment Variables
-
-```env
-# AWS Cognito
-COGNITO_USER_POOL_ID=your-pool-id
-COGNITO_CLIENT_ID=your-client-id
-COGNITO_REGION=your-region
-
-# Proxy Configuration
-PROXY_TARGET=http://localhost:your-service-port
+export default tseslint.config({
+  // Set the react version
+  settings: { react: { version: '18.3' } },
+  plugins: {
+    // Add the react plugin
+    react,
+  },
+  rules: {
+    // other rules...
+    // Enable its recommended rules
+    ...react.configs.recommended.rules,
+    ...react.configs['jsx-runtime'].rules,
+  },
+})
 ```
-
-## License
-
-MIT
