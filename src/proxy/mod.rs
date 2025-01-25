@@ -19,7 +19,22 @@ pub async fn proxy_request(
     // Build the proxy URL
     let path = req.uri().path();
     let query = req.uri().query().map(|q| format!("?{}", q)).unwrap_or_default();
-    let proxy_url = format!("{}{}{}", config.protected_website_url, path, query);
+    let mut proxy_url = format!("{}{}{}", config.protected_website_url, path, query);
+
+    // Handle protocol transitions if behind proxy
+    if config.behind_proxy {
+        if let Some(proto) = req.headers().get("x-forwarded-proto") {
+            if let Ok(proto_str) = proto.to_str() {
+                // If the request came in as HTTPS but the protected resource is HTTP,
+                // we need to ensure cookies and redirects work properly
+                if proto_str == "https" && proxy_url.starts_with("http://") {
+                    proxy_req = proxy_req
+                        .header("x-forwarded-proto", "https")
+                        .header("x-forwarded-host", req.headers().get("host").unwrap_or(&HeaderValue::from_static("")));
+                }
+            }
+        }
+    }
 
     // Convert method
     let method = reqwest::Method::from_str(req.method().as_str())
@@ -67,6 +82,42 @@ pub async fn proxy_request(
         if !is_hop_header_str(key.as_str()) {
             if let Ok(name) = HeaderName::from_str(key.as_str()) {
                 if let Ok(val) = HeaderValue::from_bytes(value.as_bytes()) {
+                    // Special handling for cookies when behind proxy
+                    if config.behind_proxy && key.as_str().eq_ignore_ascii_case("set-cookie") {
+                        if let Ok(cookie_str) = val.to_str() {
+                            // Parse and modify cookie
+                            if let Ok(mut cookie) = cookie::Cookie::parse(cookie_str) {
+                                // If the request came through HTTPS, ensure cookie is secure
+                                if let Some(proto) = req.headers().get("x-forwarded-proto") {
+                                    if let Ok(proto_str) = proto.to_str() {
+                                        if proto_str == "https" {
+                                            cookie.set_secure(true);
+                                        }
+                                    }
+                                }
+                                // Set SameSite attribute
+                                cookie.set_same_site(Some(cookie::SameSite::Lax));
+                                
+                                // Convert back to header value
+                                if let Ok(new_val) = HeaderValue::from_str(&cookie.to_string()) {
+                                    response_headers.insert(name.clone(), new_val);
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                    // Handle redirects when behind proxy
+                    else if config.behind_proxy && key.as_str().eq_ignore_ascii_case("location") {
+                        if let Ok(location) = val.to_str() {
+                            if location.starts_with("http://") && req.headers().get("x-forwarded-proto").map_or(false, |h| h == "https") {
+                                // Convert http:// to https:// in redirects
+                                if let Ok(new_val) = HeaderValue::from_str(&location.replace("http://", "https://")) {
+                                    response_headers.insert(name.clone(), new_val);
+                                    continue;
+                                }
+                            }
+                        }
+                    }
                     response_headers.insert(name, val);
                 }
             }
